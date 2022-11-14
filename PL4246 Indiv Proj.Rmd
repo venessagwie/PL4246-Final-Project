@@ -1,0 +1,220 @@
+---
+title: "PL4246 Project"
+author: "Venessa Gwie Xin"
+date: '2022-10-23'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(eval = FALSE)
+knitr::opts_chunk$set(include = TRUE)
+library(igraph)
+CatData <- read.csv('Category.csv')
+NetData <- read.csv('Network.csv')
+
+```
+
+
+```{r}
+Netgraph <- graph_from_data_frame(NetData, directed = FALSE)
+summary(Netgraph)
+V(Netgraph)
+```
+
+
+
+
+
+```{r}
+library(tidyverse)
+g<- as.undirected(Netgraph)
+summary(g)
+
+```
+
+
+
+
+
+
+```{r}
+as.numeric(V(g)$name) %>% sort()
+
+CatData[is.na(CatData)]= "na"
+
+CatData$color <- case_when(CatData$MVPA.Category == "Low" ~ "firebrick",
+                              CatData$MVPA.Category == "Middle" ~ "darkgoldenrod",
+                              CatData$MVPA.Category == "High" ~ "darkgreen",
+                             CatData$MVPA.Category == "na" ~ "gray")
+
+CatData <- CatData[match(V(g)$name, CatData$Target), ]
+head(CatData)
+
+V(g)$MVPA.Cat <- CatData$MVPA.Category
+V(g)$color <- CatData$color
+
+par(mar=c(0,0,0,0)+.1)
+plot(g, 
+     
+     edge.arrow.size=.1, vertex.color= V(g)$color, vertex.size=8, 
+
+     vertex.frame.color="gray", vertex.label.color="black", 
+
+     vertex.label.cex=0.8, edge.curved=0.1,
+     
+     layout=layout.kamada.kawai)
+
+
+
+
+```
+
+
+
+```{r}
+
+deg <- degree(g, mode="all")
+
+par(mar=c(0,0,0,0)+1)
+plot(g, 
+     
+     edge.arrow.size=.1, vertex.color= V(g)$color, vertex.size=deg*0.6, 
+
+     vertex.frame.color="black", vertex.label.color="white", 
+
+     vertex.label.cex=0.5, edge.curved=0.1,
+     
+     layout=layout.kamada.kawai)
+```
+
+```{r}
+
+CatData$Gendercolor <- case_when(CatData$Gender == "F" ~ "tomato",
+                              CatData$Gender == "M" ~ "lightblue")
+
+V(g)$gender <- CatData$Gendercolor
+
+par(mar=c(0,0,0,0)+.1)
+plot(g, 
+     
+     edge.arrow.size=.1, vertex.color= V(g)$gender, vertex.size=deg*0.6, 
+
+     vertex.frame.color="gray", vertex.label.color="black", 
+
+     vertex.label.cex=0.8, edge.curved=0.1,
+     
+     layout=layout.kamada.kawai)
+
+
+
+```
+
+```{r}
+
+assortativity_df<- data.frame(matrix(ncol=7,nrow=1))
+colnames(assortativity_df) <- c("MVPA","MVPA.Cat","Gender","IntrinsicMotivation","ExtrinsicMotivation","ExtBodyMindMotives","ExtSocialMotives")
+
+assortativity_df$MVPA.Cat<- igraph::assortativity(
+  g, 
+  as.integer(as.factor(V(g)$MVPA.Cat))
+)
+
+V(g)$MVPA <- CatData$MVPA
+assortativity_df$MVPA<- igraph::assortativity(
+  g, 
+  as.integer(as.factor(V(g)$MVPA))
+)
+
+
+assortativity_df$Gender<- igraph::assortativity(
+  g, 
+  as.integer(as.factor(V(g)$gender))
+)
+
+
+V(g)$InMot <- CatData$Intrinsic.motivation
+
+assortativity_df$IntrinsicMotivation<- igraph::assortativity(
+  g, 
+  as.integer(as.factor(V(g)$InMot))
+)
+
+V(g)$ExMot <- CatData$Extrinsic.motivation
+assortativity_df$ExtrinsicMotivation<- igraph::assortativity(
+  g, 
+  as.integer(as.factor(V(g)$ExMot))
+)
+
+V(g)$ExMotBMM <- CatData$Ext.motivation..Body.mind.motives
+assortativity_df$ExtBodyMindMotives <- igraph::assortativity(
+  g, 
+  as.integer(as.factor(V(g)$ExMotBMM))
+)
+
+V(g)$ExMotSM <- CatData$Ext.motivation..Social.motives
+assortativity_df$ExtSocialMotives<- igraph::assortativity(
+  g, 
+  as.integer(as.factor(V(g)$ExMotSM))
+)
+
+assortativity_df
+```
+
+```{r}
+transitivity1_df <- as.data.frame ( rbind(V(g)$name,
+      transitivity(g, type='local',weights=NA) %>% round (3)
+      )) 
+
+transitivity1_df <-as.data.frame ( t(apply(transitivity1_df,1,sort)))
+
+transitivity1_df <- t(transitivity1_df)
+colnames(transitivity1_df) <- c("Target", "LCC")
+transitivity1_df
+
+library(dplyr)
+df<-rbind(CatData$Target,CatData$MVPA)
+df <- t(df)
+colnames(df) <- c("Target", "MVPA")
+df
+
+transitivity_df <- merge(transitivity1_df, df)
+
+transitivity_df <- na.omit(transitivity_df)
+
+transitivity_df
+
+
+
+```
+
+```{r}
+transitivity_df$MVPA <- as.numeric(transitivity_df$MVPA)
+transitivity_df$LCC <- as.numeric(transitivity_df$LCC)
+
+cor.test(transitivity_df$MVPA, transitivity_df$LCC, method = c("pearson"))
+
+```
+
+
+
+```{r}
+d <- degree(g)
+CatData$Degree <- d[as.character(CatData$Target)]
+
+CatData$MVPA<- as.numeric(CatData$MVPA)
+CatData$Degree<- as.numeric(CatData$Degree)
+cor.test(CatData$MVPA, CatData$Degree, method = c("pearson"))
+
+```
+
+
+
+```{r}
+
+transitivity (g, type='global')
+
+
+```
